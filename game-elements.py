@@ -1,3 +1,8 @@
+### to sort out
+# leaderboard
+# touching more than one circle simultaneously
+# code clean up
+
 import math
 import random
 import time
@@ -9,7 +14,7 @@ class gamecircle:
     HUMAN = 0
     MACHINE = 1
     STARTMASS = 20
-    def __init__(self,position,speed,type,controller,colour):
+    def __init__(self,position,speed,type,controller,colour,name):
         self.position = position
         self.speed = speed
         self.type = type
@@ -23,6 +28,7 @@ class gamecircle:
         self.setradius()
         self.maxspeed = 0
         self.setmaxspeed()
+        self.name = name
 
     def growby(self, addedmass):
         self.mass += addedmass
@@ -64,25 +70,37 @@ class gamecircle:
 
 class board:
     def __init__(self,width,height,startingfoods):
+        self.bot_counter = 1
+        self.human_counter = 1
         self.width = width
         self.height = height
         self.foods = []
         self.eaters=[]
         self.populate(startingfoods)
 
+
     def populate(self,numberoffoods):
         for num in range(numberoffoods):
             self.add_food()
 
-        for i in range(3):
-            pos = [random.uniform(0,self.width),random.uniform(0,self.height)]
-            gc = gamecircle(pos,[0,0],gamecircle.EATER,gamecircle.MACHINE,'blue')
-            self.eaters.append(gc)
+        for i in range(7):
+            self.add_eater(gamecircle.MACHINE)
 
     def add_food(self):
         pos = [random.uniform(0,self.width),random.uniform(0,self.height)]
-        gc = gamecircle(pos,[0,0],gamecircle.FOOD,gamecircle.MACHINE,'green')
+        gc = gamecircle(pos,[0,0],gamecircle.FOOD,gamecircle.MACHINE,'green',name='food')
         self.foods.append(gc)
+
+    def add_eater(self,controller):
+        pos = [random.uniform(0,self.width),random.uniform(0,self.height)]
+        if controller == gamecircle.HUMAN:
+            gc = gamecircle(pos,[0,0],gamecircle.EATER,controller,'red', name = "Me_"+str(self.human_counter))
+            self.human_counter += 1
+            self.mainplayer = gc
+        else:
+            gc = gamecircle(pos,[0,0],gamecircle.EATER,controller,'blue',name="Bot_"+str(self.bot_counter))
+            self.bot_counter += 1
+        self.eaters.append(gc)
 
     def update(self):
         for gc in self.eaters:
@@ -99,7 +117,7 @@ class board:
             self.add_food()
 
     def get_move(self, gc):
-        move = random.randint(1,20)
+        move = random.randint(1,random.randint(4,100))
         if move == 1:
             gc.speed[0] -= gc.maxspeed / 5
         elif move == 2:
@@ -116,9 +134,35 @@ class board:
                 distance_apart = math.sqrt((player.position[0] - food.position[0])**2 + (player.position[1] - food.position[1])**2)
                 max_eating_distance = player.radius + food.radius
                 if distance_apart < max_eating_distance:
-                    self.consume(player, food)
+                    self.consume_food(player, food)
+        p1s = []
+        p2s = []
+        for i in range(len(self.eaters)):
+            for j in range(i):
+                player_1 = self.eaters[i]
+                player_2 = self.eaters[j]
+                distance_apart = math.sqrt((player_1.position[0] - player_2.position[0])**2 + (player_1.position[1] - player_2.position[1])**2)
+                max_eating_distance = player_1.radius + player_2.radius
+                if distance_apart < max_eating_distance:
+                    p1s.append(player_1)
+                    p2s.append(player_2)
+        for i in range(len(p1s)):
+            self.player_collision(p1s[i], p2s[i])
 
-    def consume(self, player, food):
+    def player_collision(self,p1,p2):
+        buffer_mass = 20
+        if p1.mass > p2.mass + buffer_mass:
+            self.consume_player(p1,p2)
+        elif p2.mass > p1.mass + buffer_mass:
+            self.consume_player(p2,p1)
+
+    def consume_player(self, eater, food):
+        eater.growby(food.mass)
+        self.eaters.remove(food)
+        controller = food.controller
+        self.add_eater(controller)
+
+    def consume_food(self, player, food):
         player.growby(food.mass)
         self.foods.remove(food)
         self.add_food()
@@ -138,16 +182,26 @@ class board:
         for gc in self.foods:
             if self.in_view(gc):
                 self.draw_gc(gc)
+        self.draw_leaderboard()
         txt = "Mass: {}\nPos_x: {:.1f}\nPos_y: {:.1f}\nSpeed_x: {:.1f}\nSpeed_y: {:.1f}".format(self.mainplayer.mass, self.mainplayer.position[0],self.mainplayer.position[1],self.mainplayer.speed[0],self.mainplayer.speed[1])
         canvas.create_text(500 - 50, 50, fill ='red', text = txt)
 
+    def draw_leaderboard(self):
+        global canvas
+        self.eaters.sort(key=lambda x: x.mass, reverse=True)
+        txt = ''
+        for i in range(5):
+            txt += self.eaters[i].name + '   ' + str(self.eaters[i].mass) + '\n'
+        canvas.create_text(50,50,fill = 'red', text = txt)
+
     def in_view(self,gc):
-        in_view_in_x = abs(gc.position[0] - self.mainplayer.position[0]) < self.visible_x
-        in_view_in_y = abs(gc.position[1] - self.mainplayer.position[1]) < self.visible_y
+        in_view_in_x = abs(gc.position[0] - self.mainplayer.position[0]) < self.visible_x + gc.radius
+        in_view_in_y = abs(gc.position[1] - self.mainplayer.position[1]) < self.visible_y + gc.radius
         return in_view_in_x and in_view_in_y
 
     def addmainplayer(self):
-        self.mainplayer = gamecircle(position=[self.width/2,self.height/2],speed=[0,0],type=gamecircle.EATER,controller=gamecircle.HUMAN,colour='red')
+        self.mainplayer = gamecircle(position=[self.width/2,self.height/2],speed=[0,0],type=gamecircle.EATER,controller=gamecircle.HUMAN,colour='red',name="Me_"+str(self.human_counter))
+        self.human_counter += 1
         self.eaters.append(self.mainplayer)
 
     def draw_gc(self,gc):
@@ -181,7 +235,7 @@ def key_pressed(event):
         gb.mainplayer.speed[1] += gb.mainplayer.maxspeed / 5
     gb.mainplayer.normalise_speed()
 
-gb = board(2000,1000,1000)
+gb = board(500,250,100)
 gb.addmainplayer()
 
 
