@@ -6,13 +6,9 @@ import Tkinter as tk
 class gamecircle:
     EATER = 0
     FOOD = 1
-
     HUMAN = 0
     MACHINE = 1
-
     STARTMASS = 5
-    STARTMAXSPEED = 1
-
     def __init__(self,position,speed,type,controller,colour):
         self.position = position
         self.speed = speed
@@ -23,26 +19,47 @@ class gamecircle:
             self.mass = gamecircle.STARTMASS
         else:
             self.mass = random.randint(2,15)
-        self.maxspeed = gamecircle.STARTMAXSPEED
         self.alive = True
         self.setradius()
+        self.maxspeed = 0
+        self.setmaxspeed()
 
     def growby(self, addedmass):
         self.mass += addedmass
-        updateradius()
+        self.setradius()
+        self.setmaxspeed()
 
     def setradius(self):
         self.radius = math.sqrt(self.mass)
 
-    def movestep(self):
+    def setmaxspeed(self):
+        #print('setting max speed: {} {} {}'.format(self.maxspeed, self.radius, 4.0/math.sqrt(self.radius)))
+        self.maxspeed = 4 / self.radius ** (1.0/2.5)
+        #print(self.maxspeed)
+
+    def movestep(self, width, height):
         self.position[0] += self.speed[0]
         self.position[1] += self.speed[1]
+        if self.position[0] - self.radius < 0:
+            self.position[0] = self.radius
+            self.speed[0] = 0
+        if self.position[0] + self.radius > width:
+            self.position[0] = width - self.radius
+            self.speed[0] = 0
+        if self.position[1] - self.radius < 0:
+            self.position[1] = self.radius
+            self.speed[1] = 0
+        if self.position[1] + self.radius > height:
+            self.position[1] = height - self.radius
+            self.speed[1] = 0
 
-    def draw(self):
-        global canvas
-        x1 = self.position[0] - self.radius
-        y1 = self.position[1] - self.radius
-        canvas.create_oval(x1,y1,x1+2*self.radius,y1+2*self.radius,fill=self.colour)
+    def normalise_speed(self):
+        abs_speed = math.sqrt((self.speed[0])**2 + (self.speed[1])**2)
+        #print("abs_speed: {}, maxspeed: {} radius: {}".format(abs_speed,self.maxspeed,self.radius))
+        if abs_speed > self.maxspeed:
+            for i in range(2):
+                self.speed[i] = self.speed[i]/abs_speed*self.maxspeed
+
 
 
 class board:
@@ -57,16 +74,34 @@ class board:
         for num in range(numberoffoods):
             self.add_food()
 
+        for i in range(3):
+            pos = [random.uniform(0,self.width),random.uniform(0,self.height)]
+            gc = gamecircle(pos,[0,0],gamecircle.EATER,gamecircle.MACHINE,'blue')
+            self.eaters.append(gc)
+
     def add_food(self):
         pos = [random.uniform(0,self.width),random.uniform(0,self.height)]
         gc = gamecircle(pos,[0,0],gamecircle.FOOD,gamecircle.MACHINE,'green')
         self.foods.append(gc)
 
-
     def update(self):
         for gc in self.eaters:
-            gc.movestep()
+            if gc.controller != gamecircle.HUMAN:
+                self.get_move(gc)
+            gc.movestep(self.width, self.height)
         self.collision_detction()
+
+    def get_move(self, gc):
+        move = random.randint(1,20)
+        if move == 1:
+            gc.speed[0] -= gc.maxspeed / 5
+        elif move == 2:
+            gc.speed[0] += gc.maxspeed / 5
+        elif move == 3:
+            gc.speed[1] -= gc.maxspeed / 5
+        elif move == 4:
+            gc.speed[1] += gc.maxspeed / 5
+        gc.normalise_speed()
 
     def collision_detction(self):
         for player in self.eaters:
@@ -77,28 +112,27 @@ class board:
                     self.consume(player, food)
 
     def consume(self, player, food):
-        player.mass += food.mass
-        player.setradius()
+        player.growby(food.mass)
         self.foods.remove(food)
         self.add_food()
-
 
     def draw(self):
         global canvas
         canvas.delete('all')
-        self.visible_x = self.mainplayer.radius * 10
-        self.visible_y = self.mainplayer.radius * 6
-        canvas.create_rectangle(-10,-10, self.width+10,self.height+10,fill='grey')
-        canvas.create_rectangle(self.mainplayer.position[0] - self.visible_x,self.mainplayer.position[1] - self.visible_y, self.mainplayer.position[0] + self.visible_x,self.mainplayer.position[1] + self.visible_y,fill='white',outline='grey')
+        self.visible_x = self.mainplayer.radius * 3 + 100
+        self.visible_y = self.mainplayer.radius * 3 + 100
+        canvas.create_rectangle(0,0,self.width, self.height, fill = 'grey', outline = 'grey')
+        self.draw_level()
+        #canvas.create_rectangle(-10,-10, self.width+10,self.height+10,fill='grey')
+        #canvas.create_rectangle(self.mainplayer.position[0] - self.visible_x,self.mainplayer.position[1] - self.visible_y, self.mainplayer.position[0] + self.visible_x,self.mainplayer.position[1] + self.visible_y,fill='white',outline='grey')
         for gc in self.eaters:
             if self.in_view(gc):
-                gc.draw()
+                self.draw_gc(gc)
         for gc in self.foods:
             if self.in_view(gc):
-                gc.draw()
-        txt = "Mass: {}\nPos_x: {}\nPos_y: {}".format(self.mainplayer.mass, self.mainplayer.position[0],self.mainplayer.position[1])
-        canvas.create_text(self.width - 50, 50, fill ='red', text = txt)
-
+                self.draw_gc(gc)
+        txt = "Mass: {}\nPos_x: {:.1f}\nPos_y: {:.1f}\nSpeed_x: {:.1f}\nSpeed_y: {:.1f}".format(self.mainplayer.mass, self.mainplayer.position[0],self.mainplayer.position[1],self.mainplayer.speed[0],self.mainplayer.speed[1])
+        canvas.create_text(500 - 50, 50, fill ='red', text = txt)
 
     def in_view(self,gc):
         in_view_in_x = abs(gc.position[0] - self.mainplayer.position[0]) < self.visible_x
@@ -106,26 +140,41 @@ class board:
         return in_view_in_x and in_view_in_y
 
     def addmainplayer(self):
-        self.mainplayer = gamecircle(position=[self.width/2,self.height/2],speed=[2,0],type=gamecircle.EATER,controller=gamecircle.HUMAN,colour='black')
+        self.mainplayer = gamecircle(position=[self.width/2,self.height/2],speed=[0,0],type=gamecircle.EATER,controller=gamecircle.HUMAN,colour='red')
         self.eaters.append(self.mainplayer)
 
+    def draw_gc(self,gc):
+        global canvas
+        rel_centre_x = gc.position[0] - self.mainplayer.position[0]
+        rel_centre_y = gc.position[1] - self.mainplayer.position[1]
+        in_view_x = (rel_centre_x / self.visible_x) * 500 + 250
+        in_view_y = (rel_centre_y / self.visible_y) * 500 + 250
+        canvas.create_oval(in_view_x - gc.radius/self.visible_x * 500,in_view_y - gc.radius/self.visible_y * 500,in_view_x + gc.radius/self.visible_x * 500,in_view_y + gc.radius/self.visible_y * 500,fill=gc.colour)
+        if gc.speed[0] != 0 or gc.speed[1] !=0:
+            canvas.create_line(in_view_x, in_view_y, in_view_x + gc.speed[0]/gc.maxspeed*50,in_view_y + gc.speed[1]/gc.maxspeed*50, arrow=tk.LAST)
 
-SPEED_CHANGE = 1
-
+    def draw_level(self):
+        rel_centre_x = self.width/2 - self.mainplayer.position[0]
+        rel_centre_y = self.height/2 - self.mainplayer.position[1]
+        in_view_x = (rel_centre_x / self.visible_x) * 500 + 250
+        in_view_y = (rel_centre_y / self.visible_y) * 500 + 255
+        width = self.width / self.visible_x * 500
+        height = self.height / self.visible_y * 500
+        canvas.create_rectangle(in_view_x - width/2, in_view_y - height/2,in_view_x + width/2,in_view_y + height/2,fill='white')
 
 def key_pressed(event):
-    global player
-    print('key')
+    #print('key')
     if event.char == 'a':
-        gb.mainplayer.speed[0] -= SPEED_CHANGE
+        gb.mainplayer.speed[0] -= gb.mainplayer.maxspeed / 5
     elif event.char == 'd':
-        gb.mainplayer.speed[0] += SPEED_CHANGE
+        gb.mainplayer.speed[0] += gb.mainplayer.maxspeed / 5
     elif event.char == 'w':
-        gb.mainplayer.speed[1]-= SPEED_CHANGE
+        gb.mainplayer.speed[1] -= gb.mainplayer.maxspeed / 5
     elif event.char == 's':
-        gb.mainplayer.speed[1] += SPEED_CHANGE
+        gb.mainplayer.speed[1] += gb.mainplayer.maxspeed / 5
+    gb.mainplayer.normalise_speed()
 
-gb = board(500,250,50)
+gb = board(2000,1000,1000)
 gb.addmainplayer()
 
 
@@ -134,7 +183,7 @@ gb.addmainplayer()
 
 root=tk.Tk()
 
-canvas = tk.Canvas(root, width=500, height=250)
+canvas = tk.Canvas(root, width=500, height=500)
 canvas.pack()
 root.bind("<Key>", key_pressed)
 root.title("Game")
