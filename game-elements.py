@@ -8,7 +8,7 @@ class gamecircle:
     FOOD = 1
     HUMAN = 0
     MACHINE = 1
-    STARTMASS = 5
+    STARTMASS = 20
     def __init__(self,position,speed,type,controller,colour):
         self.position = position
         self.speed = speed
@@ -90,6 +90,13 @@ class board:
                 self.get_move(gc)
             gc.movestep(self.width, self.height)
         self.collision_detction()
+        self.retire_food()
+
+    def retire_food(self):
+        x = random.randint(1,20)
+        if x == 1:
+            self.foods.pop(0)
+            self.add_food()
 
     def get_move(self, gc):
         move = random.randint(1,20)
