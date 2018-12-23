@@ -1,7 +1,8 @@
 ### to sort out
-# leaderboard
 # touching more than one circle simultaneously
 # code clean up
+# need to leak mass over time
+# background
 
 import math
 import random
@@ -235,7 +236,7 @@ def key_pressed(event):
         gb.mainplayer.speed[1] += gb.mainplayer.maxspeed / 5
     gb.mainplayer.normalise_speed()
 
-gb = board(500,250,100)
+gb = board(1500,750,400)
 gb.addmainplayer()
 
 
